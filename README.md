@@ -65,5 +65,4 @@ tests/             tests suite
 
 ## Docs
 
-- **[TECHSPEC.md](TECHSPEC.md)** — architecture overview, full API reference,
-  how to write strategies, live-paper trading semantics, and debugging.
+TechSpec.md — architecture overview, full API reference, and how to write strategies, live-paper trading semantics, and debugging.
