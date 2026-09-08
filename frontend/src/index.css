@@ -1,0 +1,330 @@
+@import "tailwindcss";
+
+/* ── Theme tokens ──────────────────────────────────────────────────────────── */
+
+/* Dark is the default palette. It lives on `:root` (not gated behind
+   `data-theme`) so windows render correctly even before their theme is
+   applied — most importantly the detached/pop-out panel windows. */
+
+:root {
+  color-scheme: dark;
+  --bg: #0a0a0a;
+  --panel: #111111;
+  --panel-2: #1a1a1a;
+  --panel-3: #222222;
+  --border: #333333;
+  --border-strong: #555555;
+  --text: #e0e0e0;
+  --text-2: #888888;
+  --text-3: #666666;
+  --accent: #00ccff;
+  --accent-soft: #00ccff18;
+  --up: #00ff41;
+  --up-soft: #00ff4118;
+  --down: #ff3333;
+  --down-soft: #ff333318;
+  --warning-bg: #331111;
+  --editor-bg: #0d0d0d;
+}
+
+:root[data-theme="light"] {
+  --bg: #e8e8e8;
+  --panel: #e0e0e0;
+  --panel-2: #d4d4d4;
+  --panel-3: #c8c8c8;
+  --border: #999999;
+  --border-strong: #777777;
+  --text: #111111;
+  --text-2: #555555;
+  --text-3: #888888;
+  --accent: #0066cc;
+  --accent-soft: #0066cc18;
+  --up: #008800;
+  --up-soft: #00880018;
+  --down: #cc0000;
+  --down-soft: #cc000018;
+  --warning-bg: #fdecee;
+  --editor-bg: #f0f0f0;
+}
+
+/* "Mid" theme — a genuine ~50% grey palette that sits between the dark and
+   light themes. Medium grey surfaces with light text. */
+:root[data-theme="mid"] {
+  color-scheme: dark;
+  --bg: #4f4f4f;
+  --panel: #585858;
+  --panel-2: #626262;
+  --panel-3: #6c6c6c;
+  --border: #7d7d7d;
+  --border-strong: #949494;
+  --text: #ececec;
+  --text-2: #c2c2c2;
+  --text-3: #9a9a9a;
+  --accent: #9db8d4;
+  --accent-soft: #9db8d418;
+  --up: #7acf7a;
+  --up-soft: #7acf7a18;
+  --down: #d68484;
+  --down-soft: #d6848418;
+  --warning-bg: #5a3a3a;
+  --editor-bg: #4a4a4a;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  border-radius: 0 !important;
+}
+
+/* ── Semantic utilities ────────────────────────────────────────────────────── */
+
+.bg-app { background: var(--bg); }
+.bg-panel { background: var(--panel); }
+.bg-panel2 { background: var(--panel-2); }
+.bg-panel3 { background: var(--panel-3); }
+.bg-editor { background: var(--editor-bg); }
+.border-tv { border-color: var(--border); }
+.border-tv-strong { border-color: var(--border-strong); }
+.text-primary { color: var(--text); }
+.text-secondary { color: var(--text-2); }
+.text-tertiary { color: var(--text-3); }
+.text-accent { color: var(--accent); }
+.text-up { color: var(--up); }
+.text-down { color: var(--down); }
+.bg-accent { background: var(--accent); }
+.bg-accent-soft { background: var(--accent-soft); }
+.bg-up-soft { background: var(--up-soft); }
+.bg-down-soft { background: var(--down-soft); }
+.bg-warning { background: var(--warning-bg); }
+
+/* ── Base interactive styling ──────────────────────────────────────────────── */
+
+button, input, select, textarea {
+  border-radius: 0 !important;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 11px;
+}
+
+button {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: none;
+}
+button:hover {
+  background: var(--panel-3);
+  border-color: var(--border-strong);
+}
+button:active {
+  border-style: inset;
+}
+button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+input, select, textarea {
+  border: 1px solid var(--border);
+  background: var(--editor-bg);
+  color: var(--text);
+  padding: 4px 8px;
+  outline: none;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent) !important;
+}
+
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%23888'%3E%3Cpath d='M0 3l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  padding-right: 22px;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ── Scrollbars — blocky terminal style ────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+::-webkit-scrollbar-corner {
+  background: var(--panel);
+}
+
+/* ── Panel collapse animation ──────────────────────────────────────────────── */
+
+.panel-slide-right {
+  overflow: hidden;
+}
+.panel-slide-bottom {
+  overflow: hidden;
+}
+
+/* ── Focus ring ────────────────────────────────────────────────────────────── */
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: none;
+}
+
+/* ── Hover utility ─────────────────────────────────────────────────────────── */
+
+.tv-hover:hover {
+  background: var(--panel-2);
+}
+
+/* ── Retro table styling ───────────────────────────────────────────────────── */
+
+table {
+  border-collapse: collapse;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+}
+
+th {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--panel);
+  padding: 4px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+td {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+}
+
+tr:hover td {
+  background: var(--panel-2);
+}
+
+/* ── Title bar style (for modals/panels) ───────────────────────────────────── */
+
+.window-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--accent);
+  color: #000;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  user-select: none;
+}
+
+/* ── Retro status badge ────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Terminal-style log output ─────────────────────────────────────────────── */
+
+.log-output {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-output .log-timestamp {
+  color: var(--text-3);
+}
+
+.log-output .log-info {
+  color: var(--accent);
+}
+
+.log-output .log-success {
+  color: var(--up);
+}
+
+.log-output .log-error {
+  color: var(--down);
+}
+
+/* ── CodeMirror custom theme overrides ─────────────────────────────────────── */
+
+.cm-editor {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace !important;
+  font-size: 12px !important;
+}
+
+.cm-editor .cm-content {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace !important;
+}
+
+.cm-editor .cm-gutters {
+  border-right: 1px solid var(--border) !important;
+  background: var(--panel) !important;
+}
+
+.cm-editor .cm-activeLineGutter {
+  background: var(--panel-2) !important;
+}
+
+.cm-editor .cm-activeLine {
+  background: var(--panel-2) !important;
+}
+
+/* ── Indicator color presets ───────────────────────────────────────────────── */
+
+.indicator-sma { color: #ffaa00; }
+.indicator-ema { color: #ff6600; }
+.indicator-bb-upper { color: #cc66cc; }
+.indicator-bb-mid { color: #cc66cc; }
+.indicator-bb-lower { color: #cc66cc; }
+.indicator-vwap { color: #00cccc; }

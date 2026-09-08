@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "delta-vantage"
+version = "0.1.0"
+description = "Paper trading & quantitative research platform"
+requires-python = ">=3.11"
+dependencies = [
+    "alpaca-py>=0.21",
+    "yfinance>=0.2.30",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[tool.setuptools.packages.find]
+include = ["delta_vantage*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# Data/provider errors are intentionally swallowed across the codebase.
+# EXE002: the OneDrive-backed filesystem re-adds exec bits to .py files.
+ignore = ["BLE001", "S110", "TRY004", "EXE002"]

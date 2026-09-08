@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.pyc
+
+# Node
+node_modules/
+frontend/dist/
+frontend/release/
+
+# Runtime state/temp
+*.db
+.dv-*.json
+
+# Secrets
+.env
+
+# Mac BS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+.idea/
+.vscode/*
+!.vscode/extensions.json
