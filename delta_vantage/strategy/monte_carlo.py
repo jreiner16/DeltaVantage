@@ -23,6 +23,7 @@ from delta_vantage.strategy.engine import _simulate, load_strategy
 
 MC_FAN_BARS = 240  # points per band after downsampling
 MC_MAX_BARS = 20_000  # above this, sims are throttled to keep responses snappy
+MC_MIN_BARS = 20  # below this the bootstrap and strategy warmup get meaningless
 _SERIAL_THRESHOLD = 30  # below this, process-spawn overhead isn't worth it
 _MC_WORKERS = max(1, min(8, (os.cpu_count() or 4) - 1))
 
@@ -149,10 +150,11 @@ def run_monte_carlo(
     sims: int = 200,
     seed: int | None = None,
     block: int | None = None,
+    progress=None,
 ) -> dict:
     n = len(df)
-    if n < 60:
-        raise ValueError("Not enough bars for Monte Carlo (need at least 60)")
+    if n < MC_MIN_BARS:
+        raise ValueError(f"Not enough bars for Monte Carlo (need at least {MC_MIN_BARS})")
 
     sims = int(min(500, max(10, sims)))
     # Very long histories explode the loop cost — drop sims proportionally.
@@ -195,6 +197,8 @@ def run_monte_carlo(
                         for arr, dd in fut:
                             paths.append(arr)
                             drawdowns.append(dd)
+                        if progress is not None:
+                            progress(len(paths), sims)
             except Exception:
                 paths, drawdowns = [], []
 
@@ -206,6 +210,8 @@ def run_monte_carlo(
                 arr = np.asarray(eq, dtype=float)
                 paths.append(arr)
                 drawdowns.append(_max_dd_pct(arr))
+                if progress is not None:
+                    progress(len(paths), sims)
             except Exception:
                 failed += 1
     runtime_ms = round((monotonic() - t0) * 1000, 2)

@@ -74,11 +74,14 @@ def _simulate(
     params: dict | None = None,
     cache=None,
     quiet: bool = False,
+    progress=None,
 ) -> SimResult:
     """Run a strategy over a bar frame and return the raw sim internals.
 
     quiet=True skips the stdout [LOG] chatter (and the log buffer entirely) —
     used by Monte Carlo, where hundreds of sims would spam the console.
+
+    progress is an optional callable(done, total) invoked on every 256th bar.
     """
     bkr = PaperBroker()
     strategy = cls()
@@ -106,7 +109,7 @@ def _simulate(
     equity: list[float] = []
     bars_held = 0
     _t0 = time.monotonic()
-    for bar in bars_list:
+    for i, bar in enumerate(bars_list):
         ctx.set_backtest_asof(bar.timestamp)
         strategy.on_bar(bar)
         for order in bkr.get_pending_orders():
@@ -118,6 +121,8 @@ def _simulate(
             bars_held += 1
             bkr.update_prices({s: bar.close for s in held})
         equity.append(round(bkr.get_portfolio().total_value, 2))
+        if progress is not None and (i % 256 == 0 or i == len(bars_list) - 1):
+            progress(i + 1, len(bars_list))
     runtime_ms = round((time.monotonic() - _t0) * 1000, 2)
     strategy.stop()
 
@@ -141,10 +146,11 @@ def run_backtest(
     interval: str,
     params: dict | None = None,
     cache=None,
+    progress=None,
 ) -> tuple[dict, PaperBroker]:
     """Full backtest for one strategy run — returns the API result dict plus
     the broker so the caller can serialise the account snapshot itself."""
-    res = _simulate(cls, df, symbol, interval, params, cache)
+    res = _simulate(cls, df, symbol, interval, params, cache, progress=progress)
 
     equity = [
         {"t": ts.isoformat(), "v": v, "c": round(float(r["Close"]), 2)}

@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from threading import Lock
 
 import pandas as pd
+import socket
 import yfinance as yf
 
 from delta_vantage.data.provider import DataProvider
@@ -20,9 +21,12 @@ _INTERVAL_MAP = {
     "1Day": "1d",
 }
 
-# Yahoo caps how far back intraday data can go. If the requested range
-# exceeds it, chunk into smaller window to avoid empty results.
-_INTERVAL_MAX_CHUNK_DAYS = {
+# Yahoo caps how far back intraday data can go; 1m history only exists for
+# the last 7 days no matter what period is requested. Clamp the window so a
+# single request covers most of the span instead of fanning out into dozens
+# of pointless calls (e.g. "1Min, 90d" previously meant 13 requests, 12 of
+# which returned empty frames).
+_MAX_LOOKBACK_DAYS = {
     "1m": 7,
     "5m": 30,
     "15m": 45,
@@ -32,11 +36,13 @@ _INTERVAL_MAX_CHUNK_DAYS = {
 }
 
 _MAX_WORKERS = 6
+_REQUEST_TIMEOUT_S = 20
 
 
 def _fetch_chunk(args: tuple) -> pd.DataFrame:
     """Fetch a single time-range chunk. Runs in a thread."""
     symbol, yf_interval, chunk_start, chunk_end = args
+    socket.setdefaulttimeout(_REQUEST_TIMEOUT_S)
     ticker = yf.Ticker(symbol)
     df = ticker.history(start=chunk_start, end=chunk_end, interval=yf_interval)
     return df
@@ -53,7 +59,8 @@ class YFinanceProvider(DataProvider):
         if end is None:
             end = datetime.now(UTC)
 
-        chunk_days = _INTERVAL_MAX_CHUNK_DAYS.get(yf_interval, 45)
+        chunk_days = _MAX_LOOKBACK_DAYS.get(yf_interval, 45)
+        start = max(start, end - timedelta(days=chunk_days))
 
         # Build the list of chunks to fetch
         chunks: list[tuple] = []

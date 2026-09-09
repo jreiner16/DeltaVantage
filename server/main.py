@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import threading
 import time as _time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -252,6 +254,58 @@ class StrategyRunRequest(BaseModel):
     interval: str = "15Min"
     days: int = 30
     params: dict = Field(default_factory=dict)
+
+
+class StrategyJobState(BaseModel):
+    job_id: str
+    kind: str  # "backtest" | "monte_carlo"
+    status: str = "pending"  # pending | running | done | error
+    stage: str = "queued"
+    progress: float = 0.0
+    error: str | None = None
+    result: dict | None = None
+    created_at: float = 0.0
+
+
+_JOBS: dict[str, StrategyJobState] = {}
+_JOBS_LOCK = threading.Lock()
+
+
+def _update_job(job: StrategyJobState, *, stage: str | None = None, progress: float | None = None) -> None:
+    with _JOBS_LOCK:
+        if stage is not None:
+            job.stage = stage
+        if progress is not None:
+            job.progress = progress
+
+
+def _start_job(kind: str, func) -> dict:
+    job = StrategyJobState(
+        job_id=uuid.uuid4().hex,
+        kind=kind,
+        status="pending",
+        stage="queued",
+        progress=0.0,
+        created_at=_time.time(),
+    )
+    with _JOBS_LOCK:
+        _JOBS[job.job_id] = job
+        while len(_JOBS) > 50:
+            _JOBS.pop(next(iter(_JOBS)))
+
+    def _run() -> None:
+        try:
+            job.status = "running"
+            job.result = func(job)
+            job.status = "done"
+            job.progress = 1.0
+        except Exception as e:
+            job.status = "error"
+            detail = getattr(e, "detail", None)
+            job.error = detail if isinstance(detail, str) and detail else str(e)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"job_id": job.job_id}
 
 
 class SettingsUpdate(BaseModel):
@@ -888,8 +942,7 @@ def _require_strategy_path(name: str) -> Path:
 
 @app.post("/api/strategies/run")
 def run_strategy(name: str, req: StrategyRunRequest) -> dict:
-    """Run a backtest for a named strategy and return trades + equity curve."""
-    return _run_backtest(name, req)
+    return _start_job("backtest", lambda job: _run_backtest(name, req, job))
 
 
 class MonteCarloRequest(BaseModel):
@@ -903,26 +956,45 @@ class MonteCarloRequest(BaseModel):
 
 
 @app.post("/api/strategies/monte-carlo")
-async def strategies_monte_carlo(name: str, req: MonteCarloRequest) -> dict:
-    return await asyncio.to_thread(_run_monte_carlo, name, req)
+def strategies_monte_carlo(name: str, req: MonteCarloRequest) -> dict:
+    return _start_job("monte_carlo", lambda job: _run_monte_carlo(name, req, job))
 
 
-def _run_monte_carlo(name: str, req: MonteCarloRequest) -> dict:
+@app.get("/api/strategies/jobs/{job_id}")
+def strategy_job(job_id: str) -> StrategyJobState:
+    job = _JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+def _run_monte_carlo(name: str, req: MonteCarloRequest, job: StrategyJobState | None = None) -> dict:
     from delta_vantage.strategy.monte_carlo import run_monte_carlo
 
+    def set(stage: str, frac: float) -> None:
+        if job is not None:
+            _update_job(job, stage=stage, progress=frac)
+
+    set("Loading strategy", 0.0)
     cls = _load_strategy_class(name)
-    df = _fetch_backtest_bars(req.symbol, req.interval, req.days)
-    return run_monte_carlo(
-        cls,
-        df,
-        req.symbol,
-        req.interval,
-        req.days,
-        req.params,
-        req.sims,
-        req.seed,
-        req.block,
-    )
+    days = _cap_lookback_days(req.interval, req.days)
+    set(f"Fetching {req.symbol} / {req.interval} ({days}d)", 0.05)
+    df = _fetch_backtest_bars(req.symbol, req.interval, days)
+    try:
+        return run_monte_carlo(
+            cls,
+            df,
+            req.symbol,
+            req.interval,
+            days,
+            req.params,
+            req.sims,
+            req.seed,
+            req.block,
+            progress=lambda done, total: set(f"Simulating {done:,} / {total:,} paths", 0.08 + 0.9 * (done / total)),
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
 
 
 def _load_strategy_class(name: str):
@@ -933,15 +1005,47 @@ def _load_strategy_class(name: str):
     return load_strategy(_require_strategy_path(name))
 
 
-def _run_backtest(name: str, req: StrategyRunRequest) -> dict:
+def _run_backtest(name: str, req: StrategyRunRequest, job: StrategyJobState | None = None) -> dict:
     from delta_vantage.strategy.engine import run_backtest
 
+    def set(stage: str, frac: float) -> None:
+        if job is not None:
+            _update_job(job, stage=stage, progress=frac)
+
+    days = _cap_lookback_days(req.interval, req.days)
+    set("Loading strategy", 0.0)
     cls = _load_strategy_class(name)
-    df = _fetch_backtest_bars(req.symbol, req.interval, req.days)
-    result, bkr = run_backtest(cls, df, req.symbol, req.interval, req.params, cache)
-    result["days"] = req.days
+    set(f"Fetching {req.symbol} / {req.interval} ({days}d)", 0.05)
+    df = _fetch_backtest_bars(req.symbol, req.interval, days)
+    set("Running bars", 0.1)
+    result, bkr = run_backtest(
+        cls,
+        df,
+        req.symbol,
+        req.interval,
+        req.params,
+        cache,
+        progress=lambda done, total: set(f"Running {done:,} / {total:,} bars", 0.1 + 0.85 * (done / total)),
+    )
+    result["days"] = days
     result["portfolio"] = _portfolio_dict(bkr.get_portfolio())
+    set("Finalizing", 0.98)
     return result
+
+
+# Match YFinanceProvider's intraday lookback caps so the UI never waits on a
+# request Yahoo can't actually serve (e.g. 1Min has only 7 days of history).
+_INTRADAY_LOOKBACK_DAYS = {
+    "1Min": 7,
+    "5Min": 30,
+    "15Min": 45,
+    "30Min": 45,
+    "1Hour": 730,
+}
+
+
+def _cap_lookback_days(interval: str, days: int) -> int:
+    return min(days, _INTRADAY_LOOKBACK_DAYS.get(interval, days))
 
 
 def _fetch_backtest_bars(symbol: str, interval: str, days: int) -> pd.DataFrame:

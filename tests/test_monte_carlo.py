@@ -113,10 +113,10 @@ def test_run_backtest_full_dict():
 
 
 def test_too_few_bars_raises():
-    df = _random_df(n=30)
+    df = _random_df(n=15)
     try:
         run_monte_carlo(FlatBuy, df, "TEST", "1Hour", 30, sims=10, seed=1)
     except ValueError as e:
-        assert "60" in str(e)
+        assert "20" in str(e)
         return
     raise AssertionError("expected ValueError for short history")

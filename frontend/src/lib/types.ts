@@ -8,6 +8,17 @@ export interface BarData {
   volume: number;
 }
 
+export interface JobState<T = unknown> {
+  job_id: string;
+  kind: "backtest" | "monte_carlo";
+  status: "pending" | "running" | "done" | "error";
+  stage: string;
+  progress: number;
+  error: string | null;
+  result: T | null;
+  created_at: number;
+}
+
 export interface Position {
   symbol: string;
   qty: number;

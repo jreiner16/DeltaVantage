@@ -110,9 +110,6 @@ export default function App() {
   const [monteCarlo, setMonteCarlo] = useState<MonteCarloResult | null>(null);
   const [savedBacktests, setSavedBacktests] = useState<import("./lib/types").BacktestSummary[]>([]);
 
-  // Panel visibility
-  const [runSignal, setRunSignal] = useState(0);
-
   // Settings
   const [theme, setTheme] = useState<Theme>("dark");
   const [showSettings, setShowSettings] = useState(false);
@@ -174,11 +171,6 @@ export default function App() {
     const view = type === "trade" ? "orders" : type;
     electronAPI.detachPanel(view);
   }, [electronAPI]);
-
-  // Focus an existing panel of the type, or dock a fresh instance.
-  const ensurePanelOfType = useCallback((type: PanelType) => {
-    setMosaic((m) => mosaicEnsurePanelOfType(m, type));
-  }, []);
 
   // Add a brand-new instance of a panel type from the Panels menu.
   const handleAddPanel = useCallback((type: PanelType) => {
@@ -870,7 +862,6 @@ export default function App() {
                     onBacktestComplete={handleBacktestComplete}
                     onMonteCarloComplete={handleMonteCarloComplete}
                     portfolioId={currentPortfolioId()}
-                    runSignal={runSignal}
                     liveStrategies={liveStrategies}
                     onStopLiveStrategy={handleStopLiveStrategy}
                   />
@@ -893,16 +884,12 @@ export default function App() {
               return {
                 body: (
                   <BacktestView
-                    result={backtest}
-                    mc={monteCarlo}
-                    saved={savedBacktests}
-                    onLoadRun={handleLoadSavedRun}
-                    onDeleteRun={handleDeleteSavedRun}
-                    onRunNew={() => {
-                      ensurePanelOfType("strategy");
-                      setRunSignal((n) => n + 1);
-                    }}
-                  />
+                      result={backtest}
+                      mc={monteCarlo}
+                      saved={savedBacktests}
+                      onLoadRun={handleLoadSavedRun}
+                      onDeleteRun={handleDeleteSavedRun}
+                    />
                 ),
               };
           }
@@ -1587,24 +1574,39 @@ function BacktestView({
   saved = [],
   onLoadRun,
   onDeleteRun,
-  onRunNew,
 }: {
   result: BacktestResult | null;
   mc?: MonteCarloResult | null;
   saved: import("./lib/types").BacktestSummary[];
   onLoadRun: (bid: string) => void;
   onDeleteRun: (bid: string) => void;
-  onRunNew: () => void;
 }) {
   const [selId, setSelId] = useState("");
   const [exportSel, setExportSel] = useState("");
   const [expandLogs, setExpandLogs] = useState(false);
   const [expandTrips, setExpandTrips] = useState(false);
   const [expandTrades, setExpandTrades] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
   useEffect(() => {
     if (!saved.some((b) => b.id === selId)) setSelId("");
   }, [saved, selId]);
+
+  useEffect(() => {
+    if (!confirmDel) return;
+    const t = setTimeout(() => setConfirmDel(null), 3000);
+    return () => clearTimeout(t);
+  }, [confirmDel]);
+
+  const pendingDel = (bid: string) => {
+    if (confirmDel === bid) {
+      setConfirmDel(null);
+      if (selId === bid) setSelId("");
+      onDeleteRun(bid);
+    } else {
+      setConfirmDel(bid);
+    }
+  };
 
   const handleSelect = (bid: string) => {
     setSelId(bid);
@@ -1644,43 +1646,37 @@ function BacktestView({
         </select>
         {selId && (
           <button
-            onClick={() => {
-              onDeleteRun(selId);
-              setSelId("");
-            }}
-            className="border border-[var(--border)] bg-transparent px-1.5 py-0.5 text-[8px] text-tertiary hover:text-down"
-            title="Delete the selected saved run"
+            onClick={() => pendingDel(selId)}
+            className={`border bg-transparent px-1.5 py-0.5 text-[8px] ${
+              confirmDel === selId
+                ? "border-[var(--down)] text-down"
+                : "border-[var(--border)] text-tertiary hover:text-down"
+            }`}
+            title={confirmDel === selId ? "Click again to delete this saved run" : "Delete the selected saved run"}
           >
-            X
+            {confirmDel === selId ? "DEL?" : "X"}
           </button>
-        )}
-        {result && (
-          <select
-            value={exportSel}
-            onChange={(e) => {
-              const k = e.target.value;
-              setExportSel("");
-              if (k && buildExports(result)[k]) downloadExport(buildExports(result)[k]);
-            }}
-            className="border border-[var(--border)] bg-editor px-1.5 py-0.5 text-[9px] text-secondary outline-none"
-            title="Export this run"
-          >
-            <option value="">EXPORT</option>
-            <option value="json">JSON (full run)</option>
-            <option value="trades">CSV (trades)</option>
-            <option value="equity">CSV (equity curve)</option>
-          </select>
         )}
         <div className="flex-1" />
         <span className="text-tertiary font-mono text-[8px]">
           {result ? `${result.bars_processed.toLocaleString()} bars · ${(result.runtime_ms / 1000).toFixed(2)}s` : ""}
         </span>
-        <button
-          onClick={onRunNew}
-          className="border border-[var(--accent)] bg-transparent px-2 py-0.5 text-[9px] font-bold text-accent hover:bg-accent-soft"
+        <select
+          value={exportSel}
+          onChange={(e) => {
+            const k = e.target.value;
+            setExportSel("");
+            if (k && result && buildExports(result)[k]) downloadExport(buildExports(result)[k]);
+          }}
+          disabled={!result}
+          className="border border-[var(--border)] bg-editor px-1.5 py-0.5 text-[9px] text-secondary outline-none disabled:opacity-40"
+          title={result ? "Export this run" : "Run a backtest to export"}
         >
-          RUN NEW
-        </button>
+          <option value="">EXPORT</option>
+          <option value="json">JSON (full run)</option>
+          <option value="trades">CSV (trades)</option>
+          <option value="equity">CSV (equity curve)</option>
+        </select>
       </div>
 
       {result && m && (
@@ -1740,10 +1736,13 @@ function BacktestView({
                           LOAD
                         </button>
                         <button
-                          onClick={() => onDeleteRun(b.id)}
-                          className="border-0 bg-transparent px-1 text-[9px] text-tertiary hover:text-down"
+                          onClick={() => pendingDel(b.id)}
+                          className={`border-0 bg-transparent px-1 text-[9px] ${
+                            confirmDel === b.id ? "font-bold text-down" : "text-tertiary hover:text-down"
+                          }`}
+                          title={confirmDel === b.id ? "Click again to confirm" : "Delete this run"}
                         >
-                          x
+                          {confirmDel === b.id ? "DEL?" : "x"}
                         </button>
                       </div>
                     </td>
