@@ -90,6 +90,57 @@ export interface BacktestResult {
   metrics: BacktestMetrics;
 }
 
+export interface MonteCarloStats {
+  start_value: number;
+  final_mean: number;
+  final_median: number;
+  final_std: number;
+  final_best: number;
+  final_worst: number;
+  prob_profit: number;
+  prob_loss: number;
+  expected_return_pct: number;
+  median_return_pct: number;
+  p5_return_pct: number;
+  p25_return_pct: number;
+  p75_return_pct: number;
+  p95_return_pct: number;
+  avg_max_drawdown_pct: number;
+  median_max_drawdown_pct: number;
+  worst_max_drawdown_pct: number;
+  actual_return_pct: number;
+  actual_max_drawdown_pct: number;
+}
+
+export interface MonteCarloPercentiles {
+  p5: number;
+  p10: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+  p95: number;
+  p99: number;
+}
+
+export interface MonteCarloResult {
+  symbol: string;
+  interval: string;
+  days: number;
+  sims: number;
+  seed: number | null;
+  block: number;
+  bars: number;
+  failed_sims: number;
+  start: string;
+  end: string;
+  runtime_ms: number;
+  stats: MonteCarloStats;
+  percentiles: MonteCarloPercentiles;
+  fan: { t: string[]; p10: number[]; p25: number[]; p50: number[]; p75: number[]; p90: number[] };
+  actual: { t: string[]; v: number[] };
+}
+
 export interface BacktestMetrics {
   total_return_pct: number;
   annualized_return_pct: number;

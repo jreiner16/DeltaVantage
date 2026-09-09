@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { BacktestResult, LiveStrategy, Strategy } from "../lib/types";
+import type { BacktestResult, LiveStrategy, MonteCarloResult, Strategy } from "../lib/types";
 
 interface StrategyViewProps {
   refreshPortfolio: () => void;
   onBacktestComplete?: (result: BacktestResult, label?: string) => void;
+  onMonteCarloComplete?: (result: MonteCarloResult) => void;
   portfolioId?: string | null;
   runSignal?: number;
   liveStrategies?: LiveStrategy[];
@@ -31,6 +32,7 @@ const RANGE_PRESETS = [
 export default function StrategyView({
   refreshPortfolio,
   onBacktestComplete,
+  onMonteCarloComplete,
   portfolioId,
   runSignal,
   liveStrategies = [],
@@ -46,6 +48,8 @@ export default function StrategyView({
   const [btInterval, setBtInterval] = useState("1Day");
   const [btParamsText, setBtParamsText] = useState("");
   const [btRunning, setBtRunning] = useState(false);
+  const [mcSims, setMcSims] = useState(200);
+  const [mcRunning, setMcRunning] = useState(false);
   const [btName, setBtName] = useState("");
   const [presets, setPresets] = useState<Record<string, BacktestConfig>>({});
   const [presetName, setPresetName] = useState("");
@@ -167,6 +171,25 @@ export default function StrategyView({
     }
   };
 
+  const runMonteCarlo = async () => {
+    if (!selected) { setError("Select a strategy first"); return; }
+    setMcRunning(true);
+    setError("");
+    try {
+      await api.refreshStrategy(selected).catch(() => {});
+      const res = await api.runMonteCarlo(selected, {
+        symbol: btSymbol, interval: btInterval, days: btDays,
+        sims: mcSims,
+        params: parseParams(),
+      });
+      onMonteCarloComplete?.(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Monte Carlo failed");
+    } finally {
+      setMcRunning(false);
+    }
+  };
+
   const loadPresets = useCallback(async () => {
     if (!portfolioId) { setPresets({}); return; }
     try {
@@ -231,6 +254,14 @@ export default function StrategyView({
           title={selected ? `Backtest ${selected}` : "Select a strategy first"}
         >
           BACKTEST
+        </button>
+        <button
+          onClick={() => { if (selected) setRunnerOpen(true); }}
+          disabled={!selected}
+          className="border border-[var(--accent)] bg-transparent px-2 py-0.5 text-[9px] font-semibold text-[var(--accent)] hover:bg-accent-soft disabled:opacity-40"
+          title={selected ? `Monte Carlo ${selected}` : "Select a strategy first"}
+        >
+          MONTE CARLO
         </button>
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -564,6 +595,24 @@ export default function StrategyView({
                   className="w-full border border-[var(--border)] bg-editor px-2 py-1.5 font-mono text-[10px] text-primary outline-none placeholder:text-tertiary"
                 />
               </div>
+
+              {/* Monte Carlo simulations */}
+              <div className="mt-4">
+                <label className="text-tertiary mb-1 block text-[9px] font-semibold uppercase tracking-widest">
+                  Simulations <span className="normal-case">(Monte Carlo paths)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={mcSims}
+                    min={20}
+                    max={500}
+                    onChange={(e) => setMcSims(Math.max(20, Math.min(500, parseInt(e.target.value, 10) || 200)))}
+                    className="w-24 border border-[var(--border)] bg-editor px-2 py-1 text-[11px] font-mono text-primary outline-none"
+                  />
+                  <span className="text-tertiary text-[9px]">20–500 · more paths = smoother bands but slower</span>
+                </div>
+              </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] px-4 py-2.5">
@@ -580,8 +629,21 @@ export default function StrategyView({
                 CLOSE
               </button>
               <button
+                onClick={runMonteCarlo}
+                disabled={mcRunning || btRunning || !selected}
+                className={`border px-4 py-1.5 text-[11px] font-bold ${
+                  mcRunning
+                    ? "border-[var(--border)] text-secondary"
+                    : selected
+                      ? "border-[var(--border)] text-accent hover:bg-accent-soft"
+                      : "border-[var(--border)] text-secondary"
+                } disabled:opacity-40`}
+              >
+                {mcRunning ? "SIMULATING..." : "MONTE CARLO"}
+              </button>
+              <button
                 onClick={runBacktest}
-                disabled={btRunning || !selected}
+                disabled={btRunning || mcRunning || !selected}
                 className={`border px-4 py-1.5 text-[11px] font-bold ${
                   btRunning
                     ? "border-[var(--border)] text-secondary"

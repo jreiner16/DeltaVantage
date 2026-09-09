@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import sys
 import time as _time
 from contextlib import asynccontextmanager
@@ -893,6 +892,39 @@ def run_strategy(name: str, req: StrategyRunRequest) -> dict:
     return _run_backtest(name, req)
 
 
+class MonteCarloRequest(BaseModel):
+    symbol: str = "AAPL"
+    interval: str = "15Min"
+    days: int = 30
+    sims: int = 200
+    seed: int | None = None
+    block: int | None = None
+    params: dict = Field(default_factory=dict)
+
+
+@app.post("/api/strategies/monte-carlo")
+async def strategies_monte_carlo(name: str, req: MonteCarloRequest) -> dict:
+    return await asyncio.to_thread(_run_monte_carlo, name, req)
+
+
+def _run_monte_carlo(name: str, req: MonteCarloRequest) -> dict:
+    from delta_vantage.strategy.monte_carlo import run_monte_carlo
+
+    cls = _load_strategy_class(name)
+    df = _fetch_backtest_bars(req.symbol, req.interval, req.days)
+    return run_monte_carlo(
+        cls,
+        df,
+        req.symbol,
+        req.interval,
+        req.days,
+        req.params,
+        req.sims,
+        req.seed,
+        req.block,
+    )
+
+
 def _load_strategy_class(name: str):
     try:
         from delta_vantage.strategy.engine import load_strategy
@@ -902,251 +934,25 @@ def _load_strategy_class(name: str):
 
 
 def _run_backtest(name: str, req: StrategyRunRequest) -> dict:
-    from delta_vantage.strategy.base import Bar
-    from delta_vantage.trading.paper import PaperBroker
+    from delta_vantage.strategy.engine import run_backtest
 
     cls = _load_strategy_class(name)
-    bkr = PaperBroker()
+    df = _fetch_backtest_bars(req.symbol, req.interval, req.days)
+    result, bkr = run_backtest(cls, df, req.symbol, req.interval, req.params, cache)
+    result["days"] = req.days
+    result["portfolio"] = _portfolio_dict(bkr.get_portfolio())
+    return result
 
-    strategy = cls()
-    if req.params:
-        strategy.params = req.params
 
+def _fetch_backtest_bars(symbol: str, interval: str, days: int) -> pd.DataFrame:
     now = datetime.now(UTC)
-    start = now - timedelta(days=req.days)
-    df = cache.get_bars(req.symbol, req.interval, start, now)
+    start = now - timedelta(days=days)
+    df = cache.get_bars(symbol, interval, start, now)
     if df is None or df.empty:
-        df = _seed_from_yfinance(req.symbol, req.interval, start, now)
+        df = _seed_from_yfinance(symbol, interval, start, now)
     if df is None or df.empty:
-        raise HTTPException(status_code=404, detail=f"No data for {req.symbol}")
-
-    ctx = _make_ctx(bkr, backtest_df=df)
-    strategy.ctx = ctx
-
-    bars_list = [
-        Bar(
-            symbol=req.symbol,
-            timestamp=ts.to_pydatetime(),
-            open=float(r["Open"]),
-            high=float(r["High"]),
-            low=float(r["Low"]),
-            close=float(r["Close"]),
-            volume=float(r["Volume"]),
-        )
-        for ts, r in df.iterrows()
-    ]
-
-    strategy.start()
-    equity: list[dict] = []
-    bars_held = 0
-    _bt_start = _time.monotonic()
-    for bar in bars_list:
-        ctx.set_backtest_asof(bar.timestamp)
-        strategy.on_bar(bar)
-        _fill_pending(bkr, bar)
-        # Mark positions to market using the current bar close to build an equity curve.
-        held = [p.symbol for p in bkr.get_positions()]
-        if held:
-            bars_held += 1
-            bkr.update_prices({s: bar.close for s in held})
-        equity.append(
-            {
-                "t": bar.timestamp.isoformat(),
-                "v": round(bkr.get_portfolio().total_value, 2),
-                "c": round(bar.close, 2),
-            }
-        )
-    _bt_end = _time.monotonic()
-    strategy.stop()
-
-    # ── Compute backtest metrics ──────────────────────────────────────────
-    runtime_ms = round((_bt_end - _bt_start) * 1000, 2)
-    bars_processed = len(bars_list)
-
-    equity_values = [p["v"] for p in equity]
-    metrics: dict[str, Any] = {}
-
-    if len(equity_values) >= 2:
-        start_val = equity_values[0]
-        end_val = equity_values[-1]
-        total_return_pct = round((end_val / start_val - 1) * 100, 4) if start_val else 0.0
-
-        # Daily returns for Sharpe / annualized return
-        daily_returns: list[float] = []
-        for i in range(1, len(equity_values)):
-            prev = equity_values[i - 1]
-            daily_returns.append(equity_values[i] / prev - 1 if prev else 0.0)
-
-        avg_ret = sum(daily_returns) / len(daily_returns) if daily_returns else 0.0
-        var_ret = (
-            sum((r - avg_ret) ** 2 for r in daily_returns) / (len(daily_returns) - 1)
-            if len(daily_returns) > 1
-            else 0.0
-        )
-        std_ret = math.sqrt(var_ret)
-        sharpe_ratio = round((avg_ret / std_ret) * math.sqrt(252), 4) if std_ret > 0 else 0.0
-
-        # Sortino ratio — downside deviation only
-        downside = [min(r, 0.0) for r in daily_returns]
-        downside_var = (
-            sum(d * d for d in downside) / (len(downside) - 1)
-            if len(downside) > 1
-            else 0.0
-        )
-        downside_std = math.sqrt(downside_var)
-        sortino_ratio = (
-            round((avg_ret / downside_std) * math.sqrt(252), 4) if downside_std > 0 else 0.0
-        )
-
-        # Max drawdown
-        peak = equity_values[0]
-        max_dd = 0.0
-        max_dd_duration = 0
-        current_dd_duration = 0
-        for val in equity_values:
-            if val > peak:
-                peak = val
-                current_dd_duration = 0
-            else:
-                current_dd_duration += 1
-                dd = (peak - val) / peak if peak else 0.0
-                if dd > max_dd:
-                    max_dd = dd
-                    max_dd_duration = current_dd_duration
-        max_drawdown_pct = round(max_dd * 100, 4)
-
-        # Annualized return
-        n_bars = len(equity_values)
-        annualized_return_pct = 0.0
-        if n_bars > 1 and start_val > 0:
-            # Approximate bars-per-year from the interval
-            interval = req.interval.lower()
-            if "min" in interval:
-                minutes = (
-                    int("".join(filter(str.isdigit, interval)))
-                    if any(c.isdigit() for c in interval)
-                    else 15
-                )
-                bars_per_year = 252 * 6.5 * 60 / minutes
-            elif interval in ("1hour", "1h"):
-                bars_per_year = 252 * 6.5
-            elif interval in ("1day", "1d"):
-                bars_per_year = 252
-            else:
-                bars_per_year = 252
-            years = n_bars / bars_per_year
-            if years > 0 and end_val > 0:
-                annualized_return_pct = round(((end_val / start_val) ** (1 / years) - 1) * 100, 4)
-    else:
-        total_return_pct = 0.0
-        sharpe_ratio = 0.0
-        sortino_ratio = 0.0
-        max_drawdown_pct = 0.0
-        max_dd_duration = 0
-        annualized_return_pct = 0.0
-
-    # Win rate, avg win/loss, profit factor from trades
-    trades = bkr.get_trades()
-    # Pair sells with their avg entry price to determine profitability
-    # Track cumulative entry for each symbol
-    buys: dict[str, list[float]] = {}
-    wins: list[float] = []
-    losses: list[float] = []
-    for t in trades:
-        sym = t.symbol
-        if t.side.value == "buy":
-            buys.setdefault(sym, []).append(t.price)
-        elif t.side.value == "sell":
-            entries = buys.get(sym, [])
-            if entries:
-                avg_entry = sum(entries) / len(entries)
-                pnl = (t.price - avg_entry) * t.qty
-                if pnl > 0:
-                    wins.append(pnl)
-                else:
-                    losses.append(abs(pnl))
-                # Consume proportional entries
-                shares_remaining = t.qty
-                while shares_remaining > 0 and entries:
-                    shares_remaining -= 1  # simplified 1-share accounting
-                    if shares_remaining <= 0:
-                        break
-
-    total_trades = len(wins) + len(losses)
-    win_rate = round(len(wins) / total_trades, 4) if total_trades else 0.0
-    avg_win = round(sum(wins) / len(wins), 4) if wins else 0.0
-    avg_loss = round(sum(losses) / len(losses), 4) if losses else 0.0
-    gross_profit = sum(wins)
-    gross_loss = sum(losses)
-    # profit_factor is null when undefined (no losing trades, or no trades at
-    # all); JSON cannot represent Infinity and JSON.parse would choke on it.
-    if total_trades == 0:
-        profit_factor = None
-    elif gross_loss > 0:
-        profit_factor = round(gross_profit / gross_loss, 4)
-    elif gross_profit > 0:
-        profit_factor = None
-    else:
-        profit_factor = 0.0
-    avg_trade = round((gross_profit - gross_loss) / total_trades, 4) if total_trades else 0.0
-    best_trade = round(max(wins), 4) if wins else 0.0
-    worst_trade = round(-max(losses), 4) if losses else 0.0
-
-    net_profit = round(equity_values[-1] - equity_values[0], 4) if equity_values else 0.0
-    starting_value = round(equity_values[0], 2) if equity_values else 0.0
-    ending_value = round(equity_values[-1], 2) if equity_values else 0.0
-    exposure_pct = round(bars_held / bars_processed * 100, 4) if bars_processed else 0.0
-
-    metrics = {
-        "total_return_pct": total_return_pct,
-        "annualized_return_pct": annualized_return_pct,
-        "sharpe_ratio": sharpe_ratio,
-        "sortino_ratio": sortino_ratio,
-        "max_drawdown_pct": max_drawdown_pct,
-        "max_drawdown_duration": max_dd_duration,
-        "win_rate": win_rate,
-        "avg_win": avg_win,
-        "avg_loss": avg_loss,
-        "avg_trade": avg_trade,
-        "best_trade": best_trade,
-        "worst_trade": worst_trade,
-        "profit_factor": profit_factor,
-        "exposure_pct": exposure_pct,
-        "net_profit": net_profit,
-        "starting_value": starting_value,
-        "ending_value": ending_value,
-    }
-
-    final = bkr.get_portfolio()
-    return {
-        "symbol": req.symbol,
-        "interval": req.interval,
-        "days": req.days,
-        "portfolio": _portfolio_dict(final),
-        "order_count": len(bkr._orders),
-        "trade_count": len(bkr.get_trades()),
-        "start": df.index[0].isoformat(),
-        "end": df.index[-1].isoformat(),
-        "equity": equity,
-        "metrics": metrics,
-        "runtime_ms": runtime_ms,
-        "bars_processed": bars_processed,
-        "logs": list(strategy.ctx._log_buffer) if hasattr(strategy.ctx, "_log_buffer") else [],
-    }
-
-
-def _make_ctx(bkr, backtest_df=None):
-    from delta_vantage.strategy.context import StrategyContext
-
-    return StrategyContext(bkr, cache, symbols=[], backtest_df=backtest_df)
-
-
-def _fill_pending(bkr, bar):
-    from delta_vantage.strategy.engine import _check_pending_order
-
-    for order in bkr.get_pending_orders():
-        if order.symbol == bar.symbol:
-            _check_pending_order(bkr, order, bar)
+        raise HTTPException(status_code=404, detail=f"No data for {symbol}")
+    return df
 
 
 # ── Live strategy endpoints ─────────────────────────────────────────────────

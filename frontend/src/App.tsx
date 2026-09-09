@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./lib/api";
 import type {
-  BacktestResult, BarData, LiveStrategy, MarketStatus, Order, PerfPoint, Portfolio, PortfolioEntry, Position, Quote, Settings, Trade,
+  BacktestResult, BarData, LiveStrategy, MarketStatus, MonteCarloResult, Order, PerfPoint, Portfolio, PortfolioEntry, Position, Quote, Settings, Trade,
 } from "./lib/types";
 import type { IndicatorOverlay } from "./components/PriceChart";
 import TickerSidebar from "./components/TickerSidebar";
@@ -107,6 +107,7 @@ export default function App() {
 
   // Backtest report
   const [backtest, setBacktest] = useState<BacktestResult | null>(null);
+  const [monteCarlo, setMonteCarlo] = useState<MonteCarloResult | null>(null);
   const [savedBacktests, setSavedBacktests] = useState<import("./lib/types").BacktestSummary[]>([]);
 
   // Panel visibility
@@ -420,6 +421,11 @@ export default function App() {
       }).then(refreshSavedBacktests).catch(() => {});
     }
   }, [portfolios, refreshSavedBacktests]);
+
+  const handleMonteCarloComplete = useCallback((res: MonteCarloResult) => {
+    setMonteCarlo(res);
+    setMosaic((m) => mosaicEnsurePanelOfType(m, "backtest"));
+  }, []);
 
   const handleLoadSavedRun = useCallback(async (bid: string) => {
     const pid = portfolios.find((p) => p.current)?.id;
@@ -862,6 +868,7 @@ export default function App() {
                   <StrategyView
                     refreshPortfolio={refreshPortfolio}
                     onBacktestComplete={handleBacktestComplete}
+                    onMonteCarloComplete={handleMonteCarloComplete}
                     portfolioId={currentPortfolioId()}
                     runSignal={runSignal}
                     liveStrategies={liveStrategies}
@@ -887,6 +894,7 @@ export default function App() {
                 body: (
                   <BacktestView
                     result={backtest}
+                    mc={monteCarlo}
                     saved={savedBacktests}
                     onLoadRun={handleLoadSavedRun}
                     onDeleteRun={handleDeleteSavedRun}
@@ -1575,12 +1583,14 @@ function LiveEquityChart({ points, currentEquity }: {
 
 function BacktestView({
   result,
+  mc = null,
   saved = [],
   onLoadRun,
   onDeleteRun,
   onRunNew,
 }: {
   result: BacktestResult | null;
+  mc?: MonteCarloResult | null;
   saved: import("./lib/types").BacktestSummary[];
   onLoadRun: (bid: string) => void;
   onDeleteRun: (bid: string) => void;
@@ -1693,6 +1703,8 @@ function BacktestView({
           <Metric label="DD Duration" value={`${m.max_drawdown_duration} bars`} />
         </div>
       )}
+
+      {mc && <MonteCarloView mc={mc} />}
 
       {!result ? (
         <div>
@@ -1866,6 +1878,108 @@ function BacktestEquityChart({ equity }: { equity: { t: string; v: number; c: nu
         <span>{new Date(pts[0].t).toLocaleDateString()}</span>
         <span>{new Date(pts[pts.length - 1].t).toLocaleDateString()}</span>
       </div>
+    </div>
+  );
+}
+
+function MonteCarloView({ mc }: { mc: MonteCarloResult }) {
+  const s = mc.stats;
+  const p = mc.percentiles;
+  const up = mc.actual.v.length > 0 && mc.actual.v[mc.actual.v.length - 1] >= s.start_value;
+  const medianWin = s.final_median >= s.start_value;
+  return (
+    <div className="border-0 border-b border-[var(--border)] bg-panel2">
+      <div className="flex items-center gap-2 border-0 border-b border-[var(--border)] px-2 py-1">
+        <span className="text-secondary text-[9px] font-bold uppercase tracking-widest">MONTE CARLO</span>
+        <span className="text-primary text-[10px] font-bold">
+          {mc.symbol}/{mc.interval}
+        </span>
+        <span className="text-tertiary text-[8px]">
+          {mc.sims} paths · block {mc.block} · {mc.bars} bars ·{(mc.runtime_ms / 1000).toFixed(1)}s
+        </span>
+        {mc.failed_sims > 0 && (
+          <span className="text-[8px] font-bold text-[var(--down)]">{mc.failed_sims} failed</span>
+        )}
+        <div className="flex-1" />
+        <span className="text-tertiary font-mono text-[8px]">
+          {new Date(mc.start).toLocaleDateString()} → {new Date(mc.end).toLocaleDateString()}
+        </span>
+      </div>
+      <div className="grid grid-cols-4 gap-x-3 gap-y-1.5 px-3 py-1.5 xl:grid-cols-6">
+        <Metric label="Final Median" value={`$${fmt(s.final_median)}`} color={medianWin ? "var(--up)" : "var(--down)"} />
+        <Metric label="Best / Worst" value={`$${fmt(s.final_best)} / $${fmt(s.final_worst)}`} />
+        <Metric label="P(Profit)" value={`${(s.prob_profit * 100).toFixed(1)}%`} color={s.prob_profit >= 0.5 ? "var(--up)" : "var(--down)"} />
+        <Metric label="Expected Return" value={`${s.expected_return_pct >= 0 ? "+" : ""}${s.expected_return_pct.toFixed(2)}%`} color={s.expected_return_pct >= 0 ? "var(--up)" : "var(--down)"} />
+        <Metric label="Median Return" value={`${s.median_return_pct >= 0 ? "+" : ""}${s.median_return_pct.toFixed(2)}%`} color={s.median_return_pct >= 0 ? "var(--up)" : "var(--down)"} />
+        <Metric label="95th / 5th Return" value={`${s.p95_return_pct >= 0 ? "+" : ""}${s.p95_return_pct.toFixed(1)}% / ${s.p5_return_pct.toFixed(1)}%`} />
+        <Metric label="Avg Max DD" value={`${s.avg_max_drawdown_pct.toFixed(2)}%`} color="var(--down)" />
+        <Metric label="Worst Max DD" value={`${s.worst_max_drawdown_pct.toFixed(2)}%`} color="var(--down)" />
+        <Metric label="Actual Return" value={`${s.actual_return_pct >= 0 ? "+" : ""}${s.actual_return_pct.toFixed(2)}%`} color={up ? "var(--up)" : "var(--down)"} />
+        <Metric label="P90 / P10 Final" value={`$${fmt(p.p90)} / $${fmt(p.p10)}`} />
+        <Metric label="P75 / P25 Final" value={`$${fmt(p.p75)} / $${fmt(p.p25)}`} />
+        <Metric label="Final Std" value={`$${fmt(s.final_std)}`} />
+      </div>
+      <div className="p-2">
+        <MonteCarloFanChart mc={mc} />
+      </div>
+    </div>
+  );
+}
+
+function MonteCarloFanChart({ mc }: { mc: MonteCarloResult }) {
+  const f = mc.fan;
+  if (f.t.length < 2) {
+    return <p className="text-secondary text-[10px]">No path data.</p>;
+  }
+  const W = 800;
+  const H = 140;
+  const pad = 6;
+  const vals = [...f.p90, ...f.p10, ...f.p50, ...mc.actual.v];
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const xFor = (i: number) => (i / (f.t.length - 1)) * W;
+  const yFor = (v: number) => H - pad - ((v - lo) / (hi - lo || 1)) * (H - 2 * pad);
+  const band = (a: number[], b: number[]) =>
+    `${a.map((v, i) => `${xFor(i).toFixed(1)},${yFor(v).toFixed(1)}`).join(" ")} ${
+      [...b].reverse().map((v, i) => `${xFor(b.length - 1 - i).toFixed(1)},${yFor(v).toFixed(1)}`).join(" ")
+    }`;
+  const p50 = f.p50.map((v, i) => `${xFor(i).toFixed(1)},${yFor(v).toFixed(1)}`).join(" ");
+  const act = mc.actual.v.map((v, i) => `${xFor(i).toFixed(1)},${yFor(v).toFixed(1)}`).join(" ");
+  const actualPct = (mc.actual.v[mc.actual.v.length - 1] / mc.actual.v[0] - 1) * 100;
+  return (
+    <div>
+      <div className="text-secondary mb-0.5 flex items-center justify-between px-2 text-[8px]">
+        <span>FAN CHART — % BANDS (BLOCK BOOTSTRAP)</span>
+        <span className="font-mono">
+          ${fmt(mc.stats.start_value)} &rarr; ${fmt(mc.stats.final_median)} median
+        </span>
+      </div>
+      <div className="text-secondary mb-1 flex gap-3 px-2 text-[8px]">
+        <span>
+          <span className="mr-1 inline-block h-2 w-3 align-middle" style={{ background: "var(--accent)", opacity: 0.2 }} />
+          p25–p75
+        </span>
+        <span>
+          <span className="mr-1 inline-block h-2 w-3 align-middle" style={{ background: "var(--accent)", opacity: 0.12 }} />
+          p10–p90
+        </span>
+        <span className="text-accent">
+          <span className="mr-1 inline-block h-[2px] w-3 align-middle" style={{ background: "var(--accent)" }} />
+          p50 median
+        </span>
+        <span className="text-tertiary">
+          <span className="mr-1 inline-block h-0 w-3 border-t border-dashed align-middle" style={{ borderColor: "var(--border-strong)" }} />
+          actual {actualPct >= 0 ? "+" : ""}{actualPct.toFixed(1)}%
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-[120px] w-full">
+        <rect x={0} y={0} width={W} height={H} fill="var(--editor-bg)" />
+        <line x1={0} y1={yFor(mc.stats.start_value)} x2={W} y2={yFor(mc.stats.start_value)} stroke="var(--border-strong)" strokeWidth="1" strokeDasharray="3 3" />
+        <polygon points={band(f.p10, f.p90)} fill="var(--accent)" opacity={0.12} />
+        <polygon points={band(f.p25, f.p75)} fill="var(--accent)" opacity={0.22} />
+        <polyline points={p50} fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinejoin="round" />
+        <polyline points={act} fill="none" stroke="var(--border-strong)" strokeWidth="1" strokeDasharray="4 3" />
+      </svg>
     </div>
   );
 }

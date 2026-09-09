@@ -27,6 +27,7 @@ class StrategyContext:
         self._backtest_df = backtest_df
         self._asof: datetime | None = None
         self._log_buffer: list[str] = []
+        self._quiet = False
 
     def set_backtest_asof(self, ts: datetime) -> None:
         """Pin the current bar timestamp so get_data only sees bars up to it."""
@@ -44,21 +45,25 @@ class StrategyContext:
         """
         if self._backtest_df is not None:
             df = self._backtest_df
-            if self._asof is not None:
-                df = df[df.index <= self._asof]
             if df is None or df.empty:
                 return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
-            return df.tail(lookback)
+            # Positional slice instead of a boolean mask — O(log n) per call
+            # instead of O(rows), which matters when replaying long histories.
+            pos = len(df)
+            if self._asof is not None:
+                pos = df.index.searchsorted(self._asof, side="right")
+            return df.iloc[max(0, pos - lookback) : pos]
 
         now = datetime.now(UTC)
         # Request enough history — rough heuristic: lookback * interval_duration * 2
         start = now - timedelta(days=max(1, lookback // 10))
         df = self.cache.get_bars(symbol, interval, start, now)
-        if self._asof is not None:
-            df = df[df.index <= self._asof]
         if df is None or df.empty:
             return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
-        return df.tail(lookback)
+        pos = len(df)
+        if self._asof is not None:
+            pos = df.index.searchsorted(self._asof, side="right")
+        return df.iloc[max(0, pos - lookback) : pos]
 
     def get_indicator(
         self, symbol: str, indicator_name: str, lookback: int = 100, **kwargs: Any
@@ -101,5 +106,7 @@ class StrategyContext:
     # ------------------------------------------------------------------
 
     def log(self, msg: str) -> None:
+        if self._quiet:
+            return
         self._log_buffer.append(msg)
         print(f"  [LOG] {msg}")

@@ -160,6 +160,22 @@ export const api = {
       `/strategies/run?name=${encodeURIComponent(name)}`,
       req
     ),
+  runMonteCarlo: (
+    name: string,
+    req: {
+      symbol?: string;
+      interval?: string;
+      days?: number;
+      sims?: number;
+      seed?: number | null;
+      block?: number | null;
+      params?: Record<string, unknown>;
+    }
+  ) =>
+    post<import("./types").MonteCarloResult>(
+      `/strategies/monte-carlo?name=${encodeURIComponent(name)}`,
+      req
+    ),
 
   // Saved backtest runs (per-portfolio)
   backtests: (pid: string) =>

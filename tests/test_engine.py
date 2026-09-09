@@ -105,3 +105,36 @@ def test_market_order_fill_in_engine():
     assert pos.qty == 10
     assert pos.avg_entry_price == 100.5
     assert len(broker.get_trades()) == 1
+
+
+def test_get_data_window_respects_asof():
+    broker = PaperBroker()
+    ctx = StrategyContext(broker, None, ["TEST"], backtest_df=None)
+
+    n = 100
+    df = pd.DataFrame(
+        {
+            "Open": [1.0] * n,
+            "High": [1.5] * n,
+            "Low": [0.5] * n,
+            "Close": [1.0] * n,
+            "Volume": [1000.0] * n,
+        }
+    )
+    start = datetime.now(UTC) - timedelta(days=2)
+    df.index = pd.date_range(start=start, periods=n, freq="15min", tz="UTC")
+    ctx._backtest_df = df
+
+    asof = df.index[50]
+    ctx.set_backtest_asof(asof)
+    win = ctx.get_data("TEST", lookback=25)
+    assert len(win) == 25
+    assert win.index[-1] == asof
+    assert win.index[0] < asof
+
+    ctx.set_backtest_asof(df.index[5])
+    win2 = ctx.get_data("TEST", lookback=25)
+    assert len(win2) == 6  # only 6 bars lie at/before the pinned bar
+
+    ctx.set_backtest_asof(None)
+    assert len(ctx.get_data("TEST", lookback=25)) == 25

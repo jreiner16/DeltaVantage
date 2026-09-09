@@ -302,11 +302,22 @@ backtests, live strategies. Switching portfolios swaps everything.
 | Method & path | Body / query | Returns |
 |---|---|---|
 | `POST /api/strategies/run?name=sma_crossover` | `{symbol?, interval?, days?, params?}` | full result (below) |
+| `POST /api/strategies/monte-carlo?name=sma_crossover` | `{symbol?, interval?, days?, sims?, seed?, block?, params?}` | distribution result (below) |
 
 The run uses a **fresh `PaperBroker()` starting at $100k** — it never touches
 your live portfolio/account. Flow per bar: `strategy.on_bar(bar)` →
 `_fill_pending(broker, bar)` → positions marked to market at bar close →
 equity point appended.
+
+Monte Carlo re-runs the same strategy on **synthetic paths** built by a
+stationary block bootstrap: the bar shape-factors (gap=open/prev_close,
+close/open, high ≥ max(o,c), low ≤ min(o,c), volume scaled) are resampled in
+blind blocks and chained multiplicatively from the last real close, so every
+path shares the original bar time axis. Sims run across process workers (fork
+context) with a serial fallback. `sims` is clamped to `[10, 500]` (200 default),
+`block` defaults to `~sqrt(n)` clamped `[10, 60]`; above 20k bars sims are
+thinned to keep responses snappy. Per-path exceptions are skipped and counted
+in `failed_sims`.
 
 Result shape:
 ```
@@ -325,6 +336,23 @@ Metrics: `total_return_pct`, `annualized_return_pct`, `sharpe_ratio`,
 `avg_win`, `avg_loss`, `avg_trade`, `best_trade`, `worst_trade`,
 `profit_factor`, `exposure_pct`, `net_profit`, `starting_value`,
 `ending_value`.
+
+Monte Carlo result shape:
+```
+{symbol, interval, days, sims, seed, block, bars, failed_sims,
+ start, end, runtime_ms,
+ stats: {start_value, final_mean/median/std/best/worst,
+         prob_profit, prob_loss,
+         expected_return_pct, median_return_pct,
+         p5/p25/p75/p95_return_pct,
+         avg/median/worst_max_drawdown_pct,
+         actual_return_pct, actual_max_drawdown_pct},
+ percentiles: {p5, p10, p25, p50, p75, p90, p95, p99},  # final equity
+ fan: {t: [bar times], p10, p25, p50, p75, p90},        # ≤240 pts each
+ actual: {t, v}}                                        # real run, downsampled
+```
+`stats.actual_*` compare the strategy's real run on the true bars against the
+synthetic distribution. `seed` fixes reproducibility (default: random).
 
 ### Saved backtests & presets (per portfolio)
 
