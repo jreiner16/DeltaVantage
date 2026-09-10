@@ -1,4 +1,4 @@
-# DELTA VATNAGE
+# DELTA VANTAGE
 
 
 Paper trading and quantitative research. Watch charts live, place simulated orders, backtest Python strategies and run monte carlo simulations all before touching real capital. 
