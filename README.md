@@ -1,4 +1,4 @@
-# DELTA VATNAGE
+# DELTA VANTAGE
 
 
 Paper trading and quantitative research. Watch charts live, place simulated orders, backtest Python strategies and run monte carlo simulations all before touching real capital. 
@@ -55,7 +55,3 @@ strategy/         your strategy files, loaded at runtime (or drag them into the 
 frontend/          React app + Electron bits
 test_suite/             tests suite (duhh)
 ```
-
-## Docs
-
-TechSpec.md: architecture, API reference, and how to write strategies, paper trading semantics, and debugging info
