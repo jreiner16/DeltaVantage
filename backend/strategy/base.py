@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from delta_vantage.strategy.context import StrategyContext
+    from backend.strategy.context import StrategyContext
 
 
 @dataclass

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { BacktestResult, LiveStrategy, Strategy } from "../lib/types";
+import type { BacktestResult, LiveStrategy, MonteCarloResult, Strategy } from "../lib/types";
 
 interface StrategyViewProps {
   refreshPortfolio: () => void;
   onBacktestComplete?: (result: BacktestResult, label?: string) => void;
+  onMonteCarloComplete?: (result: MonteCarloResult) => void;
   portfolioId?: string | null;
-  runSignal?: number;
   liveStrategies?: LiveStrategy[];
   onStopLiveStrategy?: (key: string) => void;
 }
@@ -31,8 +31,8 @@ const RANGE_PRESETS = [
 export default function StrategyView({
   refreshPortfolio,
   onBacktestComplete,
+  onMonteCarloComplete,
   portfolioId,
-  runSignal,
   liveStrategies = [],
   onStopLiveStrategy,
 }: StrategyViewProps) {
@@ -46,10 +46,16 @@ export default function StrategyView({
   const [btInterval, setBtInterval] = useState("1Day");
   const [btParamsText, setBtParamsText] = useState("");
   const [btRunning, setBtRunning] = useState(false);
+  const [mcSims, setMcSims] = useState(200);
+  const [mcRunning, setMcRunning] = useState(false);
   const [btName, setBtName] = useState("");
   const [presets, setPresets] = useState<Record<string, BacktestConfig>>({});
   const [presetName, setPresetName] = useState("");
   const [runnerOpen, setRunnerOpen] = useState(false);
+  const [runStage, setRunStage] = useState("");
+  const [runProgress, setRunProgress] = useState(0);
+  const [runElapsed, setRunElapsed] = useState(0);
+  const runStartedAt = useRef(0);
 
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,11 +72,6 @@ export default function StrategyView({
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
-
-  // Open the runner when App signals a "run new" from the bottom panel.
-  useEffect(() => {
-    if (runSignal && runSignal > 0) setRunnerOpen(true);
-  }, [runSignal]);
 
   const select = async (name: string) => {
     setSelected(name);
@@ -147,16 +148,34 @@ export default function StrategyView({
     return out;
   };
 
+  const pollJob = async <T,>(jobId: string): Promise<T | null> => {
+    while (true) {
+      const s = await api.job<T>(jobId);
+      setRunStage(s.stage);
+      setRunProgress(s.progress);
+      setRunElapsed(Math.round((Date.now() - runStartedAt.current) / 100) / 10);
+      if (s.status === "done") return s.result;
+      if (s.status === "error") throw new Error(s.error ?? "Run failed");
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  };
+
   const runBacktest = async () => {
     if (!selected) { setError("Select a strategy to backtest"); return; }
     setBtRunning(true);
+    setRunStage("Submitting...");
+    setRunProgress(0);
+    setRunElapsed(0);
+    runStartedAt.current = Date.now();
     setError("");
     try {
       await api.refreshStrategy(selected).catch(() => {});
-      const res = await api.runStrategy(selected, {
+      const { job_id } = await api.runStrategy(selected, {
         symbol: btSymbol, interval: btInterval, days: btDays,
         params: parseParams(),
       });
+      const res = await pollJob<BacktestResult>(job_id);
+      if (!res) throw new Error("Backtest returned no result");
       refreshPortfolio();
       onBacktestComplete?.(res, btName.trim() || undefined);
       setBtName("");
@@ -164,6 +183,31 @@ export default function StrategyView({
       setError(e instanceof Error ? e.message : "Backtest failed");
     } finally {
       setBtRunning(false);
+    }
+  };
+
+  const runMonteCarlo = async () => {
+    if (!selected) { setError("Select a strategy first"); return; }
+    setMcRunning(true);
+    setRunStage("Submitting...");
+    setRunProgress(0);
+    setRunElapsed(0);
+    runStartedAt.current = Date.now();
+    setError("");
+    try {
+      await api.refreshStrategy(selected).catch(() => {});
+      const { job_id } = await api.runMonteCarlo(selected, {
+        symbol: btSymbol, interval: btInterval, days: btDays,
+        sims: mcSims,
+        params: parseParams(),
+      });
+      const res = await pollJob<MonteCarloResult>(job_id);
+      if (!res) throw new Error("Monte Carlo returned no result");
+      onMonteCarloComplete?.(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Monte Carlo failed");
+    } finally {
+      setMcRunning(false);
     }
   };
 
@@ -228,9 +272,9 @@ export default function StrategyView({
           onClick={() => { if (selected) setRunnerOpen(true); }}
           disabled={!selected}
           className="border border-[var(--accent)] bg-transparent px-2 py-0.5 text-[9px] font-semibold text-[var(--accent)] hover:bg-accent-soft disabled:opacity-40"
-          title={selected ? `Backtest ${selected}` : "Select a strategy first"}
+          title={selected ? `Run ${selected} (backtest or Monte Carlo)` : "Select a strategy first"}
         >
-          BACKTEST
+          RUN
         </button>
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -382,12 +426,6 @@ export default function StrategyView({
             <span className="text-primary text-[10px] font-semibold">{selected}.py</span>
             <span className="text-tertiary text-[8px]">READ-ONLY</span>
             <div className="flex-1" />
-            <button
-              onClick={() => setRunnerOpen(true)}
-              className="border border-[var(--accent)] bg-transparent px-2 py-0.5 text-[9px] font-bold text-accent hover:bg-accent-soft"
-            >
-              RUN BACKTEST
-            </button>
           </div>
           <pre className="min-h-0 flex-1 overflow-auto bg-editor p-2 font-mono text-[9px] leading-relaxed text-primary">
             {source}
@@ -401,16 +439,16 @@ export default function StrategyView({
           <div className="bg-panel border border-[var(--border-strong)] flex max-h-[92vh] w-[640px] max-w-[95vw] flex-col shadow-xl">
             <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-4 py-2.5">
               <span className="text-primary text-[11px] font-bold tracking-widest">
-                BACKTEST RUNNER
+                STRATEGY RUNNER
               </span>
               {selected ? (
                 <span className="text-tertiary text-[9px] font-mono">{selected}.py</span>
               ) : (
                 <span className="text-secondary text-[9px]">no strategy selected</span>
               )}
-              {btRunning && (
+              {(btRunning || mcRunning) && (
                 <span className="text-accent text-[9px] font-bold tracking-widest animate-pulse">
-                  RUNNING...
+                  {mcRunning ? "SIMULATING..." : "RUNNING..."}
                 </span>
               )}
               <div className="flex-1" />
@@ -564,34 +602,81 @@ export default function StrategyView({
                   className="w-full border border-[var(--border)] bg-editor px-2 py-1.5 font-mono text-[10px] text-primary outline-none placeholder:text-tertiary"
                 />
               </div>
+
+              {/* Monte Carlo simulations */}
+              <div className="mt-4">
+                <label className="text-tertiary mb-1 block text-[9px] font-semibold uppercase tracking-widest">
+                  Simulations <span className="normal-case">(Monte Carlo paths)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={mcSims}
+                    min={20}
+                    max={500}
+                    onChange={(e) => setMcSims(Math.max(20, Math.min(500, parseInt(e.target.value, 10) || 200)))}
+                    className="w-24 border border-[var(--border)] bg-editor px-2 py-1 text-[11px] font-mono text-primary outline-none"
+                  />
+                  <span className="text-tertiary text-[9px]">20–500 · more paths = smoother bands but slower</span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] px-4 py-2.5">
-              <span className="text-tertiary text-[9px] min-w-0 truncate">
-                {selected
-                  ? `RUN ${selected}.py ON ${btSymbol} / ${btInterval} / ${btDays}d`
-                  : "Select a strategy from the list to run a backtest"}
-              </span>
-              <div className="flex-1" />
-              <button
-                onClick={() => setRunnerOpen(false)}
-                className="border border-[var(--border)] bg-transparent px-3 py-1.5 text-[10px] text-secondary"
-              >
-                CLOSE
-              </button>
-              <button
-                onClick={runBacktest}
-                disabled={btRunning || !selected}
-                className={`border px-4 py-1.5 text-[11px] font-bold ${
-                  btRunning
-                    ? "border-[var(--border)] text-secondary"
-                    : selected
-                      ? "border-[var(--accent)] text-[var(--accent)] hover:bg-accent-soft"
-                      : "border-[var(--border)] text-secondary"
-                } disabled:opacity-40`}
-              >
-                {btRunning ? "RUNNING..." : "RUN BACKTEST"}
-              </button>
+            <div className="flex shrink-0 flex-col border-t border-[var(--border)] px-4 py-2.5">
+              {(btRunning || mcRunning) && (
+                <div className="mb-2">
+                  <div className="flex justify-between text-[8px]">
+                    <span className="text-accent truncate">{runStage || "Working..."}</span>
+                    <span className="text-tertiary ml-2 shrink-0">{runElapsed.toFixed(1)}s</span>
+                  </div>
+                  <div className="bg-panel mt-1 h-[3px] w-full overflow-hidden">
+                    <div
+                      className="bg-accent h-full transition-all duration-200"
+                      style={{ width: `${Math.round(runProgress * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-tertiary text-[9px] min-w-0 truncate">
+                  {selected
+                    ? `RUN ${selected}.py ON ${btSymbol} / ${btInterval} / ${btDays}d`
+                    : "Select a strategy from the list to run a backtest"}
+                </span>
+                <div className="flex-1" />
+                <button
+                  onClick={() => setRunnerOpen(false)}
+                  className="border border-[var(--border)] bg-transparent px-3 py-1.5 text-[10px] text-secondary"
+                >
+                  CLOSE
+                </button>
+                <button
+                  onClick={runMonteCarlo}
+                  disabled={mcRunning || btRunning || !selected}
+                  className={`border px-4 py-1.5 text-[11px] font-bold ${
+                    mcRunning
+                      ? "border-[var(--border)] text-secondary"
+                      : selected
+                        ? "border-[var(--accent)] text-[var(--accent)] hover:bg-accent-soft"
+                        : "border-[var(--border)] text-secondary"
+                  } disabled:opacity-40`}
+                >
+                  {mcRunning ? "SIMULATING..." : "MONTE CARLO"}
+                </button>
+                <button
+                  onClick={runBacktest}
+                  disabled={btRunning || mcRunning || !selected}
+                  className={`border px-4 py-1.5 text-[11px] font-bold ${
+                    btRunning
+                      ? "border-[var(--border)] text-secondary"
+                      : selected
+                        ? "border-[var(--accent)] text-[var(--accent)] hover:bg-accent-soft"
+                        : "border-[var(--border)] text-secondary"
+                  } disabled:opacity-40`}
+                >
+                  {btRunning ? "RUNNING..." : "RUN BACKTEST"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

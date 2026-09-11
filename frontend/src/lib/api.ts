@@ -156,9 +156,29 @@ export const api = {
     name: string,
     req: { symbol?: string; interval?: string; days?: number; params?: Record<string, unknown> }
   ) =>
-    post<import("./types").BacktestResult>(
+    post<{ job_id: string }>(
       `/strategies/run?name=${encodeURIComponent(name)}`,
       req
+    ),
+  runMonteCarlo: (
+    name: string,
+    req: {
+      symbol?: string;
+      interval?: string;
+      days?: number;
+      sims?: number;
+      seed?: number | null;
+      block?: number | null;
+      params?: Record<string, unknown>;
+    }
+  ) =>
+    post<{ job_id: string }>(
+      `/strategies/monte-carlo?name=${encodeURIComponent(name)}`,
+      req
+    ),
+  job: <T>(jobId: string) =>
+    get<import("./types").JobState<T>>(
+      `/strategies/jobs/${encodeURIComponent(jobId)}`
     ),
 
   // Saved backtest runs (per-portfolio)

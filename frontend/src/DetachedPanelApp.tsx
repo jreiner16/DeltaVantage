@@ -193,7 +193,6 @@ function DetachedStrategy() {
         refreshPortfolio={async () => {}}
         onBacktestComplete={() => {}}
         portfolioId={null}
-        runSignal={0}
       />
     </div>
   );

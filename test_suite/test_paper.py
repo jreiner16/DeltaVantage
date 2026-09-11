@@ -2,8 +2,8 @@
 
 import pytest
 
-from delta_vantage.trading.models import OrderStatus
-from delta_vantage.trading.paper import PaperBroker
+from backend.trading.models import OrderStatus
+from backend.trading.paper import PaperBroker
 
 
 def test_buy_stock():

@@ -6,8 +6,8 @@ reaches the overbought threshold or the trend breaks. Riskier than plain SMA
 crossover because it intentionally buys against the recent move.
 """
 
-from delta_vantage.strategy.base import Strategy, Bar
-from delta_vantage.indicators.technical import rsi, sma, atr
+from backend.strategy.base import Strategy, Bar
+from backend.indicators.technical import rsi, sma, atr
 
 
 class RSIReversal(Strategy):

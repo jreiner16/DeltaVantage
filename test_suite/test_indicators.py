@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from delta_vantage.indicators.technical import (
+from backend.indicators.technical import (
     atr,
     bollinger_bands,
     ema,

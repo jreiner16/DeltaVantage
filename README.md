@@ -3,6 +3,8 @@
 
 Paper trading and quantitative research. Watch charts live, place simulated orders, backtest Python strategies and run monte carlo simulations all before touching real capital. 
 
+Disclaimer: Monte Carlo backtesting is a beta feature currently
+
 ## Workings
 
 - Server — Python FastAPI. Serves the API endpoints for the frontend and basically does all the trading/backtest logic.
@@ -14,20 +16,18 @@ Paper trading and quantitative research. Watch charts live, place simulated orde
 
 Python 3.11+ and Node 20+.
 
-## Getting it running
+## Startups (should only be one time)
 
 ```bash
 # Python side one time
 python3 -m venv .venv
 .venv/bin/pip install -e .
 
-# Frontend one time
-cd frontend
+# Frontend one time (in ./frontend so cd frontend)
 npm install
 ```
 
-If you want to use Alpaca for better data, create an Alpaca account and set `ALPACA_API_KEY` and
-`ALPACA_SECRET_KEY`. otherwise it falls back to yfinance for data.
+If you want to use Alpaca for better data, create an Alpaca account and set `ALPACA_API_KEY` and `ALPACA_SECRET_KEY` . otherwise it falls back to yfinance for data.
 
 ## Running it
 
@@ -44,25 +44,14 @@ cd frontend
 npm run dev:electron
 ```
 
-Packaged desktop build outputs to frontend/release/:
-
-```bash
-cd frontend
-npm run build:electron
-```
-
 API docs (for writing strategies) are at http://localhost:8000/docs once the server's up. Check TECHSPEC.md for information as well.
 
-## Where things live
+## Strucfture
 
 ```
-server/            API, portfolios, ordering loop
+fastapi/            API, portfolios, ordering loop
 delta_vantage/      core library (data, indicators, trading)
-strategies/        your strategy files, loaded at runtime (or drag them into the frontend)
+strategy/         your strategy files, loaded at runtime (or drag them into the frontend)
 frontend/          React app + Electron bits
-tests/             tests suite
+test_suite/             tests suite (duhh)
 ```
-
-## Docs
-
-TechSpec.md — architecture overview, full API reference, and how to write strategies, live-paper trading semantics, and debugging.
