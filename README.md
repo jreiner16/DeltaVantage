@@ -49,11 +49,11 @@ API docs (for writing strategies) are at http://localhost:8000/docs once the ser
 ## Strucfture
 
 ```
-server/            API, portfolios, ordering loop
+fastapi/            API, portfolios, ordering loop
 delta_vantage/      core library (data, indicators, trading)
-strategies/         your strategy files, loaded at runtime (or drag them into the frontend)
+strategy/         your strategy files, loaded at runtime (or drag them into the frontend)
 frontend/          React app + Electron bits
-tests/             tests suite
+test_suite/             tests suite (duhh)
 ```
 
 ## Docs
