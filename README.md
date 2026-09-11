@@ -46,6 +46,9 @@ npm run dev:electron
 
 API docs (for writing strategies) are at http://localhost:8000/docs once the server's up. Check TECHSPEC.md for information as well.
 
+## Writing Strategies
+Look at the example strategies and the API docs. It is reccomended to use VSCode or your preferred Python IDE to simply open the DeltaVantage Strategies folder and edit them there. You can also write them externally and upload them through the frontend app. 
+
 ## Strucfture
 
 ```
