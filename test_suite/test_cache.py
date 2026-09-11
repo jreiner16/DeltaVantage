@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from delta_vantage.data.cache import BarCache
+from backend.data.cache import BarCache
 
 
 def _sample_df(n: int = 50) -> pd.DataFrame:

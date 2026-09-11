@@ -18,9 +18,9 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from delta_vantage.config import ALPACA_API_KEY, ALPACA_SECRET_KEY
-from delta_vantage.strategy.base import Bar
-from delta_vantage.trading.models import OrderStatus, Portfolio
+from backend.config import ALPACA_API_KEY, ALPACA_SECRET_KEY
+from backend.strategy.base import Bar
+from backend.trading.models import OrderStatus, Portfolio
 from server.performance import performance
 from server.settings import settings
 from server.state import broker, cache, live_manager, manager
@@ -63,7 +63,7 @@ def _refresh_bars_tail(symbol: str, interval: str, now: datetime) -> None:
 
     start = now - timedelta(days=2 if step < 86400 else 5)
     try:
-        from delta_vantage.data.alpaca import AlpacaProvider
+        from backend.data.alpaca import AlpacaProvider
 
         provider = AlpacaProvider()
         df = provider.get_bars(symbol, interval, start, now)
@@ -76,7 +76,7 @@ def _refresh_bars_tail(symbol: str, interval: str, now: datetime) -> None:
 
 
 async def _order_fill_loop() -> None:
-    from delta_vantage.strategy.engine import _check_pending_order
+    from backend.strategy.engine import _check_pending_order
 
     while True:
         await asyncio.sleep(_FILL_INTERVAL)
@@ -92,7 +92,7 @@ async def _order_fill_loop() -> None:
             prices: dict[str, float] = {}
             for symbol in symbols:
                 try:
-                    from delta_vantage.data.alpaca import AlpacaProvider
+                    from backend.data.alpaca import AlpacaProvider
 
                     provider = AlpacaProvider()
                     prices[symbol] = provider.get_latest_price(symbol)
@@ -407,7 +407,7 @@ def _symbol_exists(symbol: str, interval: str = "1Day") -> bool:
         if seeded is not None and not seeded.empty:
             return True
         # Try Alpaca directly as a final source.
-        from delta_vantage.data.alpaca import AlpacaProvider
+        from backend.data.alpaca import AlpacaProvider
 
         provider = AlpacaProvider()
         if ALPACA_API_KEY and ALPACA_SECRET_KEY:
@@ -520,7 +520,7 @@ def _bars(symbol: str, interval: str = "15Min", days: int = 30) -> dict:
 
 def _seed_from_yfinance(symbol: str, interval: str, start: datetime, end: datetime):
     try:
-        from delta_vantage.data.yfinance import YFinanceProvider
+        from backend.data.yfinance import YFinanceProvider
 
         provider = YFinanceProvider()
         df = provider.get_bars(_yf_symbol(symbol), interval, start, end)
@@ -546,7 +546,7 @@ def indicator_series(
     interval: str = "15Min",
     days: int = 30,
 ) -> dict:
-    from delta_vantage.indicators.technical import INDICATORS
+    from backend.indicators.technical import INDICATORS
 
     if not indicator:
         raise HTTPException(status_code=400, detail="query param 'indicator' is required")
@@ -969,7 +969,7 @@ def strategy_job(job_id: str) -> StrategyJobState:
 
 
 def _run_monte_carlo(name: str, req: MonteCarloRequest, job: StrategyJobState | None = None) -> dict:
-    from delta_vantage.strategy.monte_carlo import run_monte_carlo
+    from backend.strategy.monte_carlo import run_monte_carlo
 
     def set(stage: str, frac: float) -> None:
         if job is not None:
@@ -999,14 +999,14 @@ def _run_monte_carlo(name: str, req: MonteCarloRequest, job: StrategyJobState | 
 
 def _load_strategy_class(name: str):
     try:
-        from delta_vantage.strategy.engine import load_strategy
+        from backend.strategy.engine import load_strategy
     except Exception:
         raise HTTPException(status_code=500, detail="Engine import failed")
     return load_strategy(_require_strategy_path(name))
 
 
 def _run_backtest(name: str, req: StrategyRunRequest, job: StrategyJobState | None = None) -> dict:
-    from delta_vantage.strategy.engine import run_backtest
+    from backend.strategy.engine import run_backtest
 
     def set(stage: str, frac: float) -> None:
         if job is not None:

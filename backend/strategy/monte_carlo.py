@@ -18,8 +18,8 @@ from time import monotonic
 import numpy as np
 import pandas as pd
 
-from delta_vantage.strategy.base import Strategy
-from delta_vantage.strategy.engine import _simulate, load_strategy
+from backend.strategy.base import Strategy
+from backend.strategy.engine import _simulate, load_strategy
 
 MC_FAN_BARS = 240  # points per band after downsampling
 MC_MAX_BARS = 20_000  # above this, sims are throttled to keep responses snappy

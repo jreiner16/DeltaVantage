@@ -10,9 +10,9 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from delta_vantage.config import DATA_DIR
-from delta_vantage.data.cache import BarCache
-from delta_vantage.trading.paper import PaperBroker
+from backend.config import DATA_DIR
+from backend.data.cache import BarCache
+from backend.trading.paper import PaperBroker
 from server.performance import performance
 from server.settings import settings
 from server.watchlist import DEFAULT_WATCHLIST, watchlist

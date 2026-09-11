@@ -6,8 +6,8 @@ Takes more risk than a passive crossover by entering against the move and
 holding with a candle-band trailing exit.
 """
 
-from delta_vantage.strategy.base import Strategy, Bar
-from delta_vantage.indicators.technical import bollinger_bands, atr
+from backend.strategy.base import Strategy, Bar
+from backend.indicators.technical import bollinger_bands, atr
 
 
 class BollingerReversion(Strategy):

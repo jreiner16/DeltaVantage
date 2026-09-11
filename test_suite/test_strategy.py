@@ -2,10 +2,10 @@
 
 from datetime import UTC, datetime
 
-from delta_vantage.data.cache import BarCache
-from delta_vantage.strategy.base import Bar, Strategy
-from delta_vantage.strategy.context import StrategyContext
-from delta_vantage.trading.paper import PaperBroker
+from backend.data.cache import BarCache
+from backend.strategy.base import Bar, Strategy
+from backend.strategy.context import StrategyContext
+from backend.trading.paper import PaperBroker
 
 
 class CountingStrategy(Strategy):

@@ -8,10 +8,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from delta_vantage.data.cache import BarCache
-from delta_vantage.strategy.base import Bar, Strategy
-from delta_vantage.strategy.context import StrategyContext
-from delta_vantage.trading.paper import PaperBroker
+from backend.data.cache import BarCache
+from backend.strategy.base import Bar, Strategy
+from backend.strategy.context import StrategyContext
+from backend.trading.paper import PaperBroker
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class LiveStrategyManager:
                 raise ValueError(f"Strategy '{strategy_name}' is already live on {symbol}")
             from pathlib import Path
 
-            from delta_vantage.strategy.engine import load_strategy
+            from backend.strategy.engine import load_strategy
 
             strategies_dir = Path(__file__).resolve().parent.parent / "strategies"
             path = strategies_dir / f"{strategy_name}.py"
@@ -158,8 +158,8 @@ class LiveStrategyManager:
                 self.stop(self._key(entry.strategy_name, entry.symbol))
 
     def _process_entry(self, entry: RunningStrategy) -> None:
-        from delta_vantage.data.alpaca import AlpacaProvider
-        from delta_vantage.data.yfinance import YFinanceProvider
+        from backend.data.alpaca import AlpacaProvider
+        from backend.data.yfinance import YFinanceProvider
 
         symbol = entry.symbol
         interval = entry.interval
@@ -230,7 +230,7 @@ class LiveStrategyManager:
 
             # market orders fill at bar close, limit/stop checked against the range
             try:
-                from delta_vantage.strategy.engine import _check_pending_order
+                from backend.strategy.engine import _check_pending_order
 
                 for order in self._broker.get_pending_orders():
                     if order.symbol == symbol:

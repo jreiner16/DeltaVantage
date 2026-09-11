@@ -16,7 +16,7 @@ Disclaimer: Monte Carlo backtesting is a beta feature currently
 
 Python 3.11+ and Node 20+.
 
-## Getting it running
+## Startups (should only be one time)
 
 ```bash
 # Python side one time
@@ -27,7 +27,7 @@ python3 -m venv .venv
 npm install
 ```
 
-If you want to use Alpaca for better data, create an Alpaca account and set `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`. otherwise it falls back to yfinance for data.
+If you want to use Alpaca for better data, create an Alpaca account and set `ALPACA_API_KEY` and `ALPACA_SECRET_KEY` . otherwise it falls back to yfinance for data.
 
 ## Running it
 
@@ -44,16 +44,9 @@ cd frontend
 npm run dev:electron
 ```
 
-Packaged desktop build outputs to frontend/release/:
-
-```bash
-cd frontend
-npm run build:electron
-```
-
 API docs (for writing strategies) are at http://localhost:8000/docs once the server's up. Check TECHSPEC.md for information as well.
 
-## Where things live
+## Strucfture
 
 ```
 server/            API, portfolios, ordering loop

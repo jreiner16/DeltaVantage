@@ -5,11 +5,11 @@ from datetime import UTC, datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from delta_vantage.data.cache import BarCache
-from delta_vantage.strategy.base import Bar, Strategy
-from delta_vantage.strategy.context import StrategyContext
-from delta_vantage.strategy.engine import load_strategy
-from delta_vantage.trading.paper import PaperBroker
+from backend.data.cache import BarCache
+from backend.strategy.base import Bar, Strategy
+from backend.strategy.context import StrategyContext
+from backend.strategy.engine import load_strategy
+from backend.trading.paper import PaperBroker
 
 
 class BuyAndHold(Strategy):
@@ -93,7 +93,7 @@ def test_load_example_strategy():
 
 
 def test_market_order_fill_in_engine():
-    from delta_vantage.strategy.engine import _check_pending_order
+    from backend.strategy.engine import _check_pending_order
 
     broker = PaperBroker()
     order = broker.place_order("TEST", "buy", 10, "market")

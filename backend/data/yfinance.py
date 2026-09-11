@@ -10,7 +10,7 @@ import pandas as pd
 import socket
 import yfinance as yf
 
-from delta_vantage.data.provider import DataProvider
+from backend.data.provider import DataProvider
 
 _INTERVAL_MAP = {
     "1Min": "1m",

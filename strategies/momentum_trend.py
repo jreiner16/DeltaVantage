@@ -6,8 +6,8 @@ everything on a single trend/momentum break. Aggressive: specifically designed
 to add size to winning positions rather than trimming them.
 """
 
-from delta_vantage.strategy.base import Strategy, Bar
-from delta_vantage.indicators.technical import ema, rsi, atr
+from backend.strategy.base import Strategy, Bar
+from backend.indicators.technical import ema, rsi, atr
 
 
 class MomentumTrend(Strategy):

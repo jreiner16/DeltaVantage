@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 
 import pandas as pd
 
-from delta_vantage.config import ALPACA_API_KEY, ALPACA_SECRET_KEY
-from delta_vantage.data.provider import DataProvider
+from backend.config import ALPACA_API_KEY, ALPACA_SECRET_KEY
+from backend.data.provider import DataProvider
 
 _ALPACA_INTERVAL_MAP = {
     "1Min": "1Min",

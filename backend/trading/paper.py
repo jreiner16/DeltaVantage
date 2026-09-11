@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from delta_vantage.trading.models import (
+from backend.trading.models import (
     Order,
     OrderStatus,
     OrderType,

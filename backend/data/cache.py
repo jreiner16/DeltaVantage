@@ -9,7 +9,7 @@ from threading import RLock
 
 import pandas as pd
 
-from delta_vantage.config import CACHE_DB
+from backend.config import CACHE_DB
 
 _CREATE = """
 CREATE TABLE IF NOT EXISTS bars (

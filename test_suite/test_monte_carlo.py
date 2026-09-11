@@ -5,9 +5,9 @@ from datetime import UTC, datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from delta_vantage.strategy.base import Bar, Strategy
-from delta_vantage.strategy.engine import _simulate, run_backtest
-from delta_vantage.strategy.monte_carlo import (
+from backend.strategy.base import Bar, Strategy
+from backend.strategy.engine import _simulate, run_backtest
+from backend.strategy.monte_carlo import (
     MC_FAN_BARS,
     run_monte_carlo,
     simulate_path,

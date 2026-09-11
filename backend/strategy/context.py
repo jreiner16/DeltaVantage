@@ -7,10 +7,10 @@ from typing import Any
 
 import pandas as pd
 
-from delta_vantage.data.cache import BarCache
-from delta_vantage.indicators.technical import INDICATORS
-from delta_vantage.trading.models import Order, Portfolio, Position
-from delta_vantage.trading.paper import PaperBroker
+from backend.data.cache import BarCache
+from backend.indicators.technical import INDICATORS
+from backend.trading.models import Order, Portfolio, Position
+from backend.trading.paper import PaperBroker
 
 
 class StrategyContext:

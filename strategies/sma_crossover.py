@@ -3,8 +3,8 @@
 Buy when fast SMA crosses above slow SMA, sell when it crosses below.
 """
 
-from delta_vantage.strategy.base import Strategy, Bar
-from delta_vantage.indicators.technical import sma
+from backend.strategy.base import Strategy, Bar
+from backend.indicators.technical import sma
 
 
 class SMACrossover(Strategy):

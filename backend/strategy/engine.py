@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from delta_vantage.strategy.base import Bar, Strategy
-from delta_vantage.strategy.context import StrategyContext
-from delta_vantage.trading.models import Portfolio
-from delta_vantage.trading.paper import PaperBroker
+from backend.strategy.base import Bar, Strategy
+from backend.strategy.context import StrategyContext
+from backend.trading.models import Portfolio
+from backend.trading.paper import PaperBroker
 
 
 def load_strategy(path: Path) -> type[Strategy]:
