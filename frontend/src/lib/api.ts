@@ -88,7 +88,7 @@ export const api = {
     ),
   symbols: (q = "") =>
     get<{ symbols: string[] }>(`/symbols${q ? `?q=${encodeURIComponent(q)}` : ""}`),
-  watchlist: () => get<{ symbols: string[] }>("/watchlist"),
+  watchlist: () => get<{ symbols: string[]; max: number }>("/watchlist"),
   addWatchlist: (symbol: string) =>
     post<{ symbols: string[] }>("/watchlist", { symbol }),
   removeWatchlist: (symbol: string) =>

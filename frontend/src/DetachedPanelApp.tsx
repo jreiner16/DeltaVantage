@@ -62,6 +62,7 @@ function useDetachedTheme() {
 function useSharedData() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [symbols, setSymbols] = useState<string[]>([]);
+  const [maxSymbols, setMaxSymbols] = useState(0);
   const [active, setActive] = useState("AAPL");
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [orders, setOrders] = useState<Order[]>([]);
@@ -74,7 +75,7 @@ function useSharedData() {
     try { setPortfolio(await api.portfolio()); } catch {}
     try { const d = await api.orders(); setOrders(d.orders); } catch {}
     try { const d = await api.performance(); setPerfPoints(d.points); } catch {}
-    try { const d = await api.watchlist(); setSymbols(d.symbols); } catch {}
+    try { const d = await api.watchlist(); setSymbols(d.symbols); setMaxSymbols(d.max); } catch {}
     try { const d = await api.quotes(); setQuotes(d.quotes); } catch {}
     try { const d = await api.settings(); setSettings(d.settings); setInterval_(d.settings.default_interval); } catch {}
   }, []);
@@ -94,13 +95,13 @@ function useSharedData() {
 
   useEffect(() => { loadBars(active, interval_); }, [active, interval_, loadBars]);
 
-  return { portfolio, symbols, active, setActive, quotes, orders, perfPoints, bars, interval_, setInterval_, settings, refresh };
+  return { portfolio, symbols, maxSymbols, active, setActive, quotes, orders, perfPoints, bars, interval_, setInterval_, settings, refresh };
 }
 
 // ── Individual detached panels ───────────────────────────────────────────
 
 function DetachedWatchlist() {
-  const { symbols, active, setActive, quotes } = useSharedData();
+  const { symbols, maxSymbols, active, setActive, quotes } = useSharedData();
 
   const handleAdd = useCallback(async (sym: string): Promise<string | null> => {
     try { await api.addWatchlist(sym); return null; } catch { return "Failed to add"; }
@@ -124,6 +125,7 @@ function DetachedWatchlist() {
         onAdd={handleAdd}
         onReorder={handleReorder}
         quotes={quotes}
+        maxSymbols={maxSymbols}
       />
     </div>
   );

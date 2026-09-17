@@ -11,6 +11,7 @@ interface TickerSidebarProps {
   onAdd: (symbol: string) => Promise<string | null>;
   onReorder: (symbols: string[]) => void;
   quotes: Record<string, Quote>;
+  maxSymbols?: number;
   dragId?: string;
   liveStrategies?: LiveStrategy[];
   onDropStrategy?: (strategy: string, symbol: string) => void;
@@ -24,10 +25,12 @@ export default function TickerSidebar({
   onAdd,
   onReorder,
   quotes,
+  maxSymbols = 0,
   dragId,
   liveStrategies = [],
   onDropStrategy,
 }: TickerSidebarProps) {
+  const full = maxSymbols > 0 && symbols.length >= maxSymbols;
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<string[]>([]);
@@ -126,14 +129,23 @@ export default function TickerSidebar({
         </span>
         <button
           onClick={() => { setAdding(true); setQuery(""); setMatches([]); setDone(false); }}
-          className="text-secondary hover:text-accent ml-1 flex h-4 w-4 shrink-0 items-center justify-center border-0 bg-transparent"
-          title="Add symbol"
+          disabled={full}
+          className={`ml-1 flex h-4 w-4 shrink-0 items-center justify-center border-0 bg-transparent ${
+            full ? "text-tertiary cursor-not-allowed" : "text-secondary hover:text-accent"
+          }`}
+          title={full ? `Watchlist full (${maxSymbols} max) — remove one to add another` : "Add symbol"}
         >
           <svg width="9" height="9" viewBox="0 0 12 12" fill="currentColor">
             <path d="M5.5 2v6.5M2 5.5h7" stroke="currentColor" strokeWidth="1.4" />
           </svg>
         </button>
       </div>
+
+      {full && (
+        <div className="text-tertiary border-0 border-b border-[var(--border)] px-2 py-1 text-[9px]">
+          Watchlist full · {symbols.length}/{maxSymbols}
+        </div>
+      )}
 
       {/* Inline search */}
       {adding && (

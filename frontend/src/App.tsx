@@ -82,6 +82,7 @@ export default function App() {
 
   // Watchlist
   const [symbols, setSymbols] = useState<string[]>([]);
+  const [maxSymbols, setMaxSymbols] = useState(0);
   const [active, setActive] = useState("AAPL");
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
 
@@ -247,6 +248,7 @@ export default function App() {
     try {
       const d = await api.watchlist();
       setSymbols(d.symbols);
+      setMaxSymbols(d.max);
       setActive((prev) => (d.symbols.includes(prev) ? prev : d.symbols[0] || "AAPL"));
     } catch { /* ignore */ }
   }, []);
@@ -750,6 +752,7 @@ export default function App() {
                     onAdd={handleAddSymbol}
                     onReorder={handleReorderSymbols}
                     quotes={quotes}
+                    maxSymbols={maxSymbols}
                     dragId={panelId}
                     liveStrategies={liveStrategies}
                     onDropStrategy={(strategy, symbol) => {

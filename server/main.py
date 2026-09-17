@@ -24,7 +24,7 @@ from backend.trading.models import OrderStatus, Portfolio
 from server.performance import performance
 from server.settings import settings
 from server.state import broker, cache, live_manager, manager
-from server.watchlist import SEARCH_UNIVERSE, watchlist
+from server.watchlist import MAX_WATCHLIST, SEARCH_UNIVERSE, watchlist
 
 logger = logging.getLogger(__name__)
 
@@ -392,7 +392,7 @@ def symbols(q: str = "") -> dict:
 
 @app.get("/api/watchlist")
 def get_watchlist() -> dict:
-    return {"symbols": watchlist.all()}
+    return {"symbols": watchlist.all(), "max": MAX_WATCHLIST}
 
 
 def _symbol_exists(symbol: str, interval: str = "1Day") -> bool:
@@ -423,12 +423,20 @@ def add_watchlist(req: SymbolRequest) -> dict:
     symbol = req.symbol.upper().strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Symbol is required")
+    if symbol not in watchlist.all() and watchlist.is_full():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Watchlist is full ({MAX_WATCHLIST} symbols max). Remove one to add another.",
+        )
     if not _symbol_exists(symbol):
         raise HTTPException(
             status_code=400,
             detail=f"No market data found for '{symbol}'. Verify the ticker.",
         )
-    return {"symbols": watchlist.add(symbol)}
+    try:
+        return {"symbols": watchlist.add(symbol)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.delete("/api/watchlist/{symbol}")

@@ -10,6 +10,10 @@ from pathlib import Path
 # load watchilst file
 WATCHLIST_FILE = Path(__file__).resolve().parent.parent / ".dv-watchlist.json"
 
+# Upper bound on watchlist size. Every entry is refreshed for quotes on a loop,
+# so an unbounded list makes the app progressively slower.
+MAX_WATCHLIST = 25
+
 SEARCH_UNIVERSE = [
     "AAPL",
     "MSFT",
@@ -97,10 +101,20 @@ class Watchlist:
         with self._lock:
             return list(self._symbols)
 
+    def is_full(self) -> bool:
+        with self._lock:
+            return len(self._symbols) >= MAX_WATCHLIST
+
     def add(self, symbol: str) -> list[str]:
         with self._lock:
             s = symbol.upper().strip()
-            if s and s not in self._symbols:
+            if not s:
+                return list(self._symbols)
+            if s not in self._symbols and len(self._symbols) >= MAX_WATCHLIST:
+                raise ValueError(
+                    f"Watchlist is full ({MAX_WATCHLIST} symbols max). Remove one to add another."
+                )
+            if s not in self._symbols:
                 self._symbols.append(s)
                 self._save()
             return list(self._symbols)
